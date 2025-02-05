@@ -70,7 +70,7 @@ PSNR: 0.7254
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/DiffusionNeRF-3D.git
+git clone https://github.com/Srecharan/DiffusionNeRF-3D.git
 cd DiffusionNeRF-3D
 ```
 
@@ -105,7 +105,7 @@ python scripts/train_nerf.py
 
 ## License
 
-[Add your chosen license]
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgements
 
