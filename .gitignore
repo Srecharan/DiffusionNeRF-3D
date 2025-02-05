@@ -41,7 +41,6 @@ env/
 # Logs and debugging
 *.log
 *.out
-visualizations/
 
 # OS-specific
 .DS_Store

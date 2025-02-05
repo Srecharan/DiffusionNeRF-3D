@@ -1,0 +1,78 @@
+# configs/model_config.yaml
+
+training:
+  #batch_size: 8 # for diffusion I used this 
+  batch_size: 1 # for nerf
+  learning_rate: 1.0e-4 
+  epochs: 350
+  save_every: 10
+  patience: 30
+  clip_value: 0.7
+  weight_decay: 1.0e-4
+  depth_weight: 0.1 
+  scheduler:
+    min_lr: 1.0e-6
+    warmup_epochs: 20
+
+model:
+  unet:
+    in_channels: 1
+    out_channels: 1
+    time_emb_dim: 512
+    base_channels: 128
+    attention: true
+    dropout: 0.1
+    feature_enhancement: true
+
+  nerf:
+    pos_encoding_dims: 10
+    view_encoding_dims: 4
+    hidden_dims: 256
+    use_hash_encoding: true
+    num_layers: 8
+    skip_connections: [4]
+    near: 0.1
+    far: 10.0
+    n_samples_coarse: 32  # Reduced slightly
+    n_samples_fine: 64
+    depth_weight: 0.1
+    perceptual_weight: 0.01
+    chunk_size: 4096  # Reduced for memory efficiency
+    use_occupancy_grid: true
+    occupancy_resolution: 128
+    use_hash_encoding: true
+    hash_num_levels: 8
+    hash_features_per_level: 2
+    hash_size: 16
+
+  rendering:  # New section for rendering optimization
+    max_samples_per_ray: 256  # Limit samples for memory
+    ray_chunk_size: 4096  # Process rays in smaller chunks
+    point_chunk_size: 8192  # Process points in smaller chunks
+    max_points_per_batch: 262144  # Limit total points per batch
+
+    
+
+diffusion:
+  n_steps: 1000
+  beta_schedule: "cosine"
+  beta_start: 5.0e-5
+  beta_end: 0.018
+  loss_weights:
+    edge: 2.0
+    perceptual: 0.5
+    consistency: 1.0
+
+data:
+  dir: "data/raw/nyu_depth_v2"
+  augmentation:
+    flip_prob: 0.5
+    rotate_prob: 0.3
+    rotate_degrees: 10
+  nerf:
+    image_size: [256, 256]
+    n_rays_per_batch: 2304
+    precrop_fraction: 0.5
+    precrop_epochs: 500
+    camera_jitter: 0.1  # Random camera pose perturbation
+    depth_noise: 0.05   # Random depth noise for robustness
