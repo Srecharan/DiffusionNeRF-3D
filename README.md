@@ -45,8 +45,12 @@ PSNR: 0.7254
   - Dynamic batch sizing
 
 ### Depth Refinement Results
-![Depth Refinement](visualizations/sample_0_detailed.png)
-*Depth map refinement process showing: (top-left) original depth, (top-right) noisy input, (bottom-left) denoised output, and (bottom-right) error map. The model effectively preserves structural details while removing noise.*
+<div style="text-align: center">
+    <img src="visualizations/sample_0_detailed.png" width="48%" alt="Depth Refinement 1"/>
+    <img src="visualizations/sample_1_detailed.png" width="48%" alt="Depth Refinement 2"/>
+</div>
+
+Depth map refinement process showing: (top-left) original depth, (top-right) noisy input, (bottom-left) denoised output, and (bottom-right) error map. The model effectively preserves structural details while removing noise.
 
 ## Project Structure
 ```
