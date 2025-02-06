@@ -14,11 +14,9 @@ from src.models.depth_refiner import SimpleDepthRefiner
 def test_depth_refiner():
     print("Starting depth refiner test...")
     
-    # Load config
     with open('configs/model_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
     
-    # Override batch size for testing
     config['training']['batch_size'] = 2
     
     print("\n1. Testing Data Loading...")
@@ -27,8 +25,7 @@ def test_depth_refiner():
         config=config,
         num_workers=0
     )
-    
-    # Get a sample batch
+
     sample_batch = next(iter(train_loader))
     depth = sample_batch['depth']
     
@@ -49,20 +46,13 @@ def test_depth_refiner():
     
     print("\n3. Testing Forward Pass...")
     with torch.no_grad():
-        # Move data to device
         depth = depth.to(device)
-        
-        # Add some synthetic noise to test denoising
         noisy_depth = depth + 0.1 * torch.randn_like(depth)
-        
-        # Get model prediction
         refined_depth = model(noisy_depth)
         
-        # Compute loss
         loss = model.loss_fn(refined_depth, depth)
         print(f"Test loss: {loss.item():.4f}")
-        
-        # Visualize results
+
         plt.figure(figsize=(15, 5))
         
         plt.subplot(131)
@@ -83,8 +73,7 @@ def test_depth_refiner():
         os.makedirs('debug_outputs', exist_ok=True)
         plt.savefig('debug_outputs/depth_refiner_test.png')
         plt.close()
-        
-        # Visualize edges
+
         edges = model.compute_edges(depth)
         refined_edges = model.compute_edges(refined_depth)
         

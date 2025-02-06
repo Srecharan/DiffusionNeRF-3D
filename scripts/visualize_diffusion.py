@@ -16,8 +16,6 @@ from src.models.unet import UNet
 from src.models.diffusion import DiffusionModel
 from src.data.nyu_dataset import get_data_loaders
 
-# scripts/visualize_diffusion.py
-
 def load_model(checkpoint_path, config, device):
     """Load trained model from checkpoint"""
     model = UNet(
@@ -37,10 +35,8 @@ def load_model(checkpoint_path, config, device):
         device=device
     )
     
-    # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
-    # Process state dict to remove _orig_mod prefix
     state_dict = checkpoint['model_state_dict']
     new_state_dict = {}
     
@@ -51,7 +47,6 @@ def load_model(checkpoint_path, config, device):
         else:
             new_state_dict[key] = value
     
-    # Load the processed state dict
     model.load_state_dict(new_state_dict)
     model.eval()  # Set to evaluation mode
     
@@ -68,40 +63,29 @@ def visualize_samples(model, diffusion, val_loader, device, num_samples=5):
                 break
                 
             depth_maps = batch['depth'].to(device)
-            
-            # Add noise
+
             t = torch.ones(depth_maps.shape[0], device=device).long() * (diffusion.n_steps // 2)
             noisy_depths, noise = diffusion.noise_images(depth_maps, t)
-            
-            # Denoise
             with autocast(device_type='cuda', enabled=True):
                 noise_pred = model(noisy_depths, t/diffusion.n_steps)
-            
-            # Denoise the depth maps
+
             denoised = noisy_depths - noise_pred
             
-            # Calculate error map
             error = torch.abs(denoised - depth_maps)
-            
-            # Visualize with error map
             fig, axes = plt.subplots(2, 2, figsize=(15, 15))
-            
-            # Original depth map
+
             im0 = axes[0,0].imshow(depth_maps[0, 0].cpu(), cmap='plasma')
             axes[0,0].set_title('Original Depth')
             plt.colorbar(im0, ax=axes[0,0])
-            
-            # Noisy depth map
+
             im1 = axes[0,1].imshow(noisy_depths[0, 0].cpu(), cmap='plasma')
             axes[0,1].set_title('Noisy Depth')
             plt.colorbar(im1, ax=axes[0,1])
-            
-            # Denoised prediction
+
             im2 = axes[1,0].imshow(denoised[0, 0].cpu(), cmap='plasma')
             axes[1,0].set_title('Denoised Depth')
             plt.colorbar(im2, ax=axes[1,0])
-            
-            # Error map
+
             im3 = axes[1,1].imshow(error[0, 0].cpu(), cmap='hot')
             axes[1,1].set_title('Error Map')
             plt.colorbar(im3, ax=axes[1,1])
@@ -120,16 +104,11 @@ def calculate_metrics(model, diffusion, val_loader, device):
     with torch.no_grad():
         for batch in tqdm(val_loader, desc="Calculating metrics"):
             depth_maps = batch['depth'].to(device)
-            
-            # Add noise
             t = torch.ones(depth_maps.shape[0], device=device).long() * (diffusion.n_steps // 2)
             noisy_depths, noise = diffusion.noise_images(depth_maps, t)
-            
-            # Denoise
             with autocast(device_type='cuda', enabled=True):  # Fixed autocast
                 noise_pred = model(noisy_depths, t/diffusion.n_steps)
-            
-            # Calculate metrics
+
             denoised = noisy_depths - noise_pred
             mse = F.mse_loss(denoised, depth_maps)
             psnr = -10 * torch.log10(mse)
@@ -150,47 +129,34 @@ def get_latest_experiment_dir():
                       if d.startswith('diffusion_experiment_')]
     if not experiment_dirs:
         raise RuntimeError("No experiment directories found!")
-    
-    # Sort by creation time and get the most recent
     latest_dir = max(experiment_dirs, key=os.path.getctime)
     return latest_dir
 
 def main():
     print("Starting visualization and evaluation...")
-    
-    # Load config
+
     with open('configs/model_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
-    
-    # Get the latest experiment directory automatically
+
     experiment_dir = get_latest_experiment_dir()
     print(f"Using latest experiment directory: {experiment_dir}")
     
-    # Load best model
     checkpoint_path = os.path.join(experiment_dir, 'best_model.pt')
     print(f"Loading model from: {checkpoint_path}")
     
     model, diffusion = load_model(checkpoint_path, config, device)
-    
-    # Create data loader
+
     data_dir = 'data/raw/nyu_depth_v2'
     _, val_loader = get_data_loaders(data_dir, batch_size=4)
-    
-    # Create visualization directory
+
     os.makedirs('visualizations', exist_ok=True)
-    
-    # Generate visualizations
     print("Generating visualizations...")
     visualize_samples(model, diffusion, val_loader, device)
-    
-    # Calculate metrics
     print("Calculating metrics...")
     metrics = calculate_metrics(model, diffusion, val_loader, device)
-    
-    # Print and save metrics
     print("\nMetrics on validation set:")
     for metric_name, value in metrics.items():
         print(f"{metric_name}: {value:.4f}")

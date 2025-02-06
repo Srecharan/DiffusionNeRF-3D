@@ -40,25 +40,21 @@ class EarlyStopping:
 def create_scheduler(optimizer, config, num_training_steps):
     from torch.optim.lr_scheduler import OneCycleLR, LinearLR, SequentialLR
     
-    # Calculate steps per epoch and total steps
     warmup_epochs = config['training']['scheduler']['warmup_epochs']
     total_epochs = config['training']['epochs']
-    
-    # Ensure we have valid step counts
+
     warmup_steps = max(1, int(warmup_epochs * num_training_steps / total_epochs))
     remaining_steps = max(1, num_training_steps - warmup_steps)
     
     print(f"Scheduler setup: {num_training_steps} total steps, {warmup_steps} warmup steps, {remaining_steps} remaining steps")
-    
-    # Create warmup scheduler
+
     warmup_scheduler = LinearLR(
         optimizer,
         start_factor=0.1,
         end_factor=1.0,
         total_iters=warmup_steps
     )
-    
-    # Create main scheduler
+
     main_scheduler = OneCycleLR(
         optimizer,
         max_lr=config['training']['learning_rate'],
@@ -69,7 +65,6 @@ def create_scheduler(optimizer, config, num_training_steps):
         div_factor=10.0
     )
     
-    # Combine schedulers
     return SequentialLR(
         optimizer,
         schedulers=[warmup_scheduler, main_scheduler],
@@ -77,24 +72,20 @@ def create_scheduler(optimizer, config, num_training_steps):
     )
 
 def train(config):
-    # Configure PyTorch memory allocation
     torch.cuda.set_per_process_memory_fraction(0.9)
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     
-    # Setup logging
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_dir = os.path.join('runs', f'diffusion_experiment_{timestamp}')
     writer = SummaryWriter(log_dir)
     
-    # Create data loaders
     train_loader, val_loader = get_data_loaders(
         config['data']['dir'],  # Updated to match new config structure
         batch_size=config['training']['batch_size']
     )
 
-    # Initialize model with updated config
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = UNet(
         in_channels=config['model']['unet']['in_channels'],
@@ -104,10 +95,8 @@ def train(config):
         attention=config['model']['unet']['attention']
     ).to(device)
 
-    # Enable memory efficient features
     model = torch.compile(model)
     
-    # Initialize diffusion model with updated config
     diffusion = MultiViewDiffusion(
         model,
         n_steps=config['diffusion']['n_steps'],
@@ -116,32 +105,25 @@ def train(config):
         beta_schedule=config['diffusion']['beta_schedule'],
         device=device
     )
-    
-    # Setup optimizer
+
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config['training']['learning_rate'],
         weight_decay=config['training']['weight_decay']
     )
-    
-    # Calculate total training steps
+
     steps_per_epoch = len(train_loader)
     total_steps = steps_per_epoch * config['training']['epochs']
     print(f"Training setup: {steps_per_epoch} steps per epoch, {total_steps} total steps")
-    
-    # Setup learning rate scheduler
+
     scheduler = create_scheduler(optimizer, config, total_steps)
-    
-    # Setup mixed precision training
+
     scaler = amp.GradScaler('cuda')
     
-    # Setup early stopping
     early_stopping = EarlyStopping(patience=config['training']['patience'])
-    
-    # Initialize best validation loss
+
     best_val_loss = float('inf')
-    
-    # Training loop
+
     for epoch in range(config['training']['epochs']):
         model.train()
         total_train_loss = 0
@@ -149,8 +131,7 @@ def train(config):
         with tqdm(train_loader, desc=f'Epoch {epoch+1}/{config["training"]["epochs"]}') as pbar:
             for batch in pbar:
                 depth_maps = batch['depth'].to(device)
-                
-                # Clear cache periodically
+
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 
@@ -159,8 +140,7 @@ def train(config):
                     loss = diffusion.training_step(depth_maps)
                 
                 scaler.scale(loss).backward()
-                
-                # Gradient clipping
+
                 if config['training']['clip_value'] > 0:
                     scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(
@@ -173,14 +153,12 @@ def train(config):
                 scheduler.step()
                 
                 total_train_loss += loss.item()
-                
-                # Update progress bar
+
                 pbar.set_postfix({
                     'loss': f'{loss.item():.4f}',
                     'lr': f'{scheduler.get_last_lr()[0]:.6f}'
                 })
-                
-                # Log memory usage
+
                 if torch.cuda.is_available():
                     writer.add_scalar(
                         'Memory/allocated',
@@ -189,8 +167,7 @@ def train(config):
                     )
         
         avg_train_loss = total_train_loss / len(train_loader)
-        
-        # Validation phase
+
         model.eval()
         total_val_loss = 0
         
@@ -202,15 +179,13 @@ def train(config):
                 total_val_loss += loss.item()
         
         avg_val_loss = total_val_loss / len(val_loader)
-        
-        # Log metrics
+
         writer.add_scalar('Loss/train', avg_train_loss, epoch)
         writer.add_scalar('Loss/val', avg_val_loss, epoch)
         writer.add_scalar('Learning_rate', scheduler.get_last_lr()[0], epoch)
         
         print(f'Epoch {epoch+1}: Train Loss = {avg_train_loss:.4f}, Val Loss = {avg_val_loss:.4f}')
-        
-        # Save best model
+
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             torch.save({
@@ -222,8 +197,7 @@ def train(config):
                 'val_loss': avg_val_loss,
                 'config': config,
             }, os.path.join(log_dir, 'best_model.pt'))
-        
-        # Regular checkpoint saving
+
         if (epoch + 1) % config['training']['save_every'] == 0:
             torch.save({
                 'epoch': epoch,
@@ -234,20 +208,17 @@ def train(config):
                 'val_loss': avg_val_loss,
                 'config': config,
             }, os.path.join(log_dir, f'checkpoint_epoch_{epoch+1}.pt'))
-        
-        # Early stopping check
+
         early_stopping(avg_val_loss)
         if early_stopping.early_stop:
             print("Early stopping triggered")
             break
 
 if __name__ == '__main__':
-    # Load and validate config
     try:
         with open('configs/model_config.yaml', 'r') as f:
             config = yaml.safe_load(f)
             
-        # Validate data directory
         data_dir = config['data']['dir']
         if not os.path.exists(data_dir):
             alt_data_dir = os.path.join(project_root, data_dir)
@@ -256,7 +227,6 @@ if __name__ == '__main__':
             else:
                 raise FileNotFoundError(f"Data directory not found at {data_dir} or {alt_data_dir}")
         
-        # Create output directories
         os.makedirs('runs', exist_ok=True)
         
         print(f"Using device: {'cuda' if torch.cuda.is_available() else 'cpu'}")

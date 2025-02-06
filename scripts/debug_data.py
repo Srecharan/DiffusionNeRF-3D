@@ -10,17 +10,15 @@ sys.path.append(project_root)
 
 from src.data.nyu_dataset import get_data_loaders
 from src.models.unet import UNet
-from src.models.diffusion import DiffusionModel  # Note the changed import
-from src.utils.diffusion_metrics import DiffusionDebugger  # New import
+from src.models.diffusion import DiffusionModel  
+from src.utils.diffusion_metrics import DiffusionDebugger  
 
 def analyze_data():
     print("Starting enhanced debug analysis...")
     
-    # Load config
     with open('configs/model_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
-    
-    # Override batch size for testing
+
     config['training']['batch_size'] = 2
     
     print("\n1. Testing Data Loading...")
@@ -29,8 +27,7 @@ def analyze_data():
         config=config,
         num_workers=0
     )
-    
-    # Get a sample batch
+
     sample_batch = next(iter(train_loader))
     depth = sample_batch['depth']
     
@@ -42,8 +39,7 @@ def analyze_data():
     print(f"Depth range: [{depth.min():.3f}, {depth.max():.3f}]")
     print(f"Depth mean: {depth.mean():.3f}")
     print(f"Depth std: {depth.std():.3f}")
-    
-    # Basic visualization
+
     visualize_depth_data(depth, 'debug_outputs/depth_analysis.png')
     
     print("\n2. Testing Model Setup...")
@@ -53,10 +49,9 @@ def analyze_data():
     model = UNet(
         in_channels=1,
         out_channels=1,
-        time_emb_dim=256  # using default value or change as needed
+        time_emb_dim=256  
     ).to(device)
-    
-    # Create improved diffusion
+
     diffusion = DiffusionModel(
         model,
         n_steps=config['diffusion']['n_steps'],
@@ -65,37 +60,30 @@ def analyze_data():
         beta_end=0.005,
         device=device
     )
-    
-    # Create debugger
+
     debugger = DiffusionDebugger(diffusion)
     
     print("\n3. Testing Forward Pass with Enhanced Monitoring...")
     with torch.no_grad():
         depth = depth.to(device)
         
-        # Test multiple noise levels
         noise_levels = [0, diffusion.n_steps // 4, diffusion.n_steps // 2, 3 * diffusion.n_steps // 4]
         
         plt.figure(figsize=(15, 5 * len(noise_levels)))
         for idx, t_step in enumerate(noise_levels):
-            # Ensure all tensors are on the same device
             depth = depth.to(device)
             t = torch.ones(depth.shape[0], device=device, dtype=torch.long) * t_step
-            
-            # Test noising process
+
             noisy_depth, noise = diffusion.noise_images(depth, t)
-            
-            # Test denoising
+
             pred = model(noisy_depth, t)
-            
-            # Compute metrics
+
             metrics = debugger.evaluate_step(depth, noisy_depth, pred)
             print(f"\nMetrics for noise level {t_step}:")
             print(f"PSNR: {metrics['psnr']:.2f}dB")
             print(f"SSIM: {metrics['ssim']:.3f}")
             print(f"Edge Preservation: {metrics['edge_preservation']:.3f}")
-            
-            # Visualize
+
             plt.subplot(len(noise_levels), 3, 3*idx + 1)
             plt.imshow(depth[0, 0].cpu().numpy(), cmap='plasma')
             plt.colorbar()
@@ -114,8 +102,7 @@ def analyze_data():
         plt.tight_layout()
         plt.savefig('debug_outputs/diffusion_process_enhanced.png')
         plt.close()
-        
-        # Plot metrics
+
         debugger.plot_metrics()
     
     print("\n4. Testing Memory Usage...")

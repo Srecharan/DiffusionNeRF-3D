@@ -25,18 +25,15 @@ class NeRFVisualizer:
         self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Load model
         self.nerf_model = self._load_model(checkpoint_path)
         self.renderer = VolumetricRenderer(
             n_coarse=config['model']['nerf']['n_samples_coarse'],
             n_fine=config['model']['nerf']['n_samples_fine']
         )
-        
-        # Create output directory
+
         self.output_dir = Path('visualizations/nerf')
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Performance monitoring
+
         self.perf_stats = {
             'fps': [],
             'memory_usage': [],
@@ -64,12 +61,9 @@ class NeRFVisualizer:
         depths = []
         
         for pose in tqdm(poses, desc='Rendering path'):
-            # Generate rays for this pose
             rays_o, rays_d = self._get_rays(H, W, pose)
             rays_o = rays_o.to(self.device)
             rays_d = rays_d.to(self.device)
-            
-            # Render with chunks for memory efficiency
             rgb_chunks = []
             depth_chunks = []
             
@@ -101,12 +95,9 @@ class NeRFVisualizer:
         """Generate rays for an image."""
         i, j = torch.meshgrid(torch.linspace(0, H-1, H),
                             torch.linspace(0, W-1, W))
-        
-        # Camera parameters (from NYU dataset)
         fx, fy = 582.62, 582.69
         cx, cy = 313.04, 238.44
-        
-        # Scale for image size
+
         fx *= W / 640
         fy *= H / 480
         cx *= W / 640
@@ -136,7 +127,7 @@ class NeRFVisualizer:
         
         # 1. Render validation images
         for idx, batch in enumerate(val_loader):
-            if idx >= 5:  # Visualize first 5 images
+            if idx >= 5:  
                 break
                 
             rays_o = batch['rays_o'].to(self.device)
@@ -144,7 +135,6 @@ class NeRFVisualizer:
             rgb_gt = batch['rgb'].to(self.device)
             depth_gt = batch['depth'].to(self.device)
             
-            # Render
             start_time = time.time()
             with autocast(device_type='cuda', enabled=True):
                 out = self.renderer.render_rays(
@@ -156,17 +146,14 @@ class NeRFVisualizer:
                 )
             elapsed = time.time() - start_time
             
-            # Update performance stats
             self.perf_stats['fps'].append(1/elapsed)
             if torch.cuda.is_available():
                 self.perf_stats['memory_usage'].append(
                     torch.cuda.memory_allocated() / 1024**2
                 )
             
-            # Create visualization
             fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-            
-            # RGB comparison
+
             axes[0,0].imshow(rgb_gt[0].cpu())
             axes[0,0].set_title('Ground Truth RGB')
             
@@ -176,8 +163,7 @@ class NeRFVisualizer:
             diff_rgb = torch.abs(rgb_gt[0].cpu() - out['rgb_fine'][0].cpu())
             axes[0,2].imshow(diff_rgb)
             axes[0,2].set_title('RGB Error')
-            
-            # Depth comparison
+
             axes[1,0].imshow(depth_gt[0].cpu(), cmap='plasma')
             axes[1,0].set_title('Ground Truth Depth')
             
@@ -192,13 +178,10 @@ class NeRFVisualizer:
             plt.tight_layout()
             plt.savefig(self.output_dir / f'validation_{idx}.png', dpi=300)
             plt.close()
-        
-        # 2. Generate spiral path video
         poses = self.generate_spiral_poses()
         rgbs, depths = self.render_path(poses, 
                                       self.config['data']['nerf']['image_size'])
         
-        # Save video frames
         video_dir = self.output_dir / 'video'
         video_dir.mkdir(exist_ok=True)
         
@@ -216,8 +199,6 @@ class NeRFVisualizer:
             
             plt.savefig(video_dir / f'frame_{i:04d}.png', dpi=150)
             plt.close()
-        
-        # 3. Plot performance metrics
         plt.figure(figsize=(15, 5))
         
         plt.subplot(121)
@@ -243,27 +224,20 @@ class NeRFVisualizer:
             print(f"Peak GPU Memory: {max(self.perf_stats['memory_usage']):.2f} MB")
 
 def main():
-    # Load config
     with open('configs/model_config.yaml', 'r') as f:
         config = yaml.safe_load(f)
     
-    # Get latest checkpoint
     latest_exp = max(Path('runs').glob('nerf_experiment_*'),
                     key=lambda p: p.stat().st_mtime)
     checkpoint_path = latest_exp / 'best.pt'
-    
-    # Create visualizer
     visualizer = NeRFVisualizer(config, checkpoint_path)
-    
-    # Get validation data
+
     _, val_loader = get_nerf_loaders(
         config['data']['dir'],
         batch_size=1,
         img_wh=tuple(config['data']['nerf']['image_size']),
         n_rays=config['data']['nerf']['n_rays_per_batch']
     )
-    
-    # Generate visualizations
     visualizer.visualize_results(val_loader)
 
 if __name__ == '__main__':

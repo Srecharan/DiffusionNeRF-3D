@@ -11,7 +11,6 @@ def download_nyu_dataset(target_dir):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
     
-    # URL for the labeled dataset
     url = 'http://horatio.cs.nyu.edu/mit/silberman/nyu_depth_v2/nyu_depth_v2_labeled.mat'
     output = os.path.join(target_dir, 'nyu_depth_v2_labeled.mat')
     
@@ -25,23 +24,18 @@ def process_nyu_dataset(mat_file, output_dir):
     """Process the .mat file into numpy arrays"""
     print("Processing NYU Depth V2 dataset...")
     
-    # Create output directories
     os.makedirs(os.path.join(output_dir, 'rgb'), exist_ok=True)
     os.makedirs(os.path.join(output_dir, 'depth'), exist_ok=True)
-    
-    # Load the .mat file
+
     dataset = h5py.File(mat_file, 'r')
     
-    # Get the data
     images = dataset['images']
     depths = dataset['depths']
     
     for i in tqdm(range(len(images))):
-        # Save RGB image
         img = np.transpose(images[i], (2, 1, 0))
         np.save(os.path.join(output_dir, 'rgb', f'{i:05d}.npy'), img)
         
-        # Save depth map
         depth = np.transpose(depths[i])
         np.save(os.path.join(output_dir, 'depth', f'{i:05d}.npy'), depth)
 

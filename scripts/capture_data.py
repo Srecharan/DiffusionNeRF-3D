@@ -7,7 +7,6 @@ import cv2
 from datetime import datetime
 import argparse
 
-# Add project root to Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(project_root)
 
@@ -18,24 +17,20 @@ def create_capture_session():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     session_dir = os.path.join(project_root, 'data', 'raw', f'session_{timestamp}')
     
-    # Create directory structure
     os.makedirs(os.path.join(session_dir, 'rgb'))
     os.makedirs(os.path.join(session_dir, 'depth'))
     
     return session_dir
 
 def main(args):
-    # Create capture session directory
     session_dir = create_capture_session()
-    
-    # Initialize RealSense camera
+
     camera = RealSenseCapture(
         width=args.width,
         height=args.height,
         fps=args.fps
     ).start()
-    
-    # Save camera intrinsics
+
     camera.save_intrinsics(os.path.join(session_dir, 'intrinsics.json'))
     
     frame_count = 0
@@ -46,7 +41,6 @@ def main(args):
             if color_image is None or depth_image is None:
                 continue
             
-            # Display frames
             cv2.imshow('RGB-D Capture', np.hstack((
                 color_image,
                 cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
@@ -54,15 +48,12 @@ def main(args):
             
             key = cv2.waitKey(1)
             
-            # Space bar to capture frame
-            if key == 32:  # Space
-                # Save frames
+            if key == 32:  
                 cv2.imwrite(os.path.join(session_dir, 'rgb', f'{frame_count:06d}.png'), color_image)
                 np.save(os.path.join(session_dir, 'depth', f'{frame_count:06d}.npy'), depth_image)
                 print(f'Captured frame {frame_count}')
                 frame_count += 1
             
-            # ESC to exit
             elif key == 27:  # ESC
                 break
                 
