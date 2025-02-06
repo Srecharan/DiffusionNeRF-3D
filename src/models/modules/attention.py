@@ -37,7 +37,6 @@ class CrossAttention(nn.Module):
     def forward(self, x, context=None):
         batch_size, channel, height, width = x.shape
         
-        # Reshape input to [batch, seq_len, channels]
         x = x.reshape(batch_size, channel, -1).permute(0, 2, 1)
         if context is None:
             context = x
@@ -58,8 +57,6 @@ class CrossAttention(nn.Module):
         # Reshape back
         out = self.reshape_batch_dim_to_heads(out, batch_size)
         out = self.to_out(out)
-        
-        # Reshape to original image format
         out = out.permute(0, 2, 1).reshape(batch_size, channel, height, width)
         return out
 
